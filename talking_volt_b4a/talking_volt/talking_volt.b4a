@@ -1,0 +1,152 @@
+﻿Build1=Default,b4a.GraphicsFirstSteps
+File1=main.bal
+FileGroup1=Default Group
+Group=Default Group
+Library1=core
+Library2=felusbserial
+Library3=usb
+Library4=tts
+ManifestCode='This code will be applied to the manifest file during compilation.~\n~'You do not need to modify it in most cases.~\n~'See this link for for more information: http://www.b4x.com/forum/showthread.php?p=78136~\n~AddManifestText(~\n~<uses-sdk android:minSdkVersion="5" android:targetSdkVersion="26"/>~\n~<supports-screens android:largeScreens="true" ~\n~    android:normalScreens="true" ~\n~    android:smallScreens="true" ~\n~    android:anyDensity="true"/>)~\n~SetApplicationAttribute(android:icon, "@drawable/icon")~\n~SetApplicationAttribute(android:label, "$LABEL$")~\n~'End of default text.~\n~
+NumberOfFiles=1
+NumberOfLibraries=4
+NumberOfModules=0
+Version=10.2
+@EndOfDesignText@
+#Region  Project Attributes 
+	#ApplicationLabel: talking_volt
+	#VersionCode: 1
+	#VersionName: 2
+	'SupportedOrientations possible values: unspecified, landscape or portrait.
+	#SupportedOrientations: portrait
+	#CanInstallToExternalStorage: False
+#End Region
+
+#Region  Activity Attributes 
+	#FullScreen: False
+	#IncludeTitle: True
+#End Region
+
+Sub Process_Globals
+	Private usbserial As felUsbSerial
+	Private manager As UsbManager
+	Private TTS1 As TTS
+	Dim timer1 As Timer
+
+End Sub
+
+Sub Globals
+	Private btnConnect As Button
+	Private Label1 As Label
+	Private analog1 As EditText	
+	Private changeBar As SeekBar
+	Private btnTalk As Button
+	Private volt="1.000" As String
+	Private lblTime As Label
+	Private btnStop As Button
+	Private speakEn=True As Boolean
+End Sub
+
+Sub Activity_Create(FirstTime As Boolean)
+	If FirstTime Then
+		manager.Initialize
+	End If
+	Activity.LoadLayout("main")	
+	TTS1.Initialize("TTS1")
+	TTS1.SpeechRate = 0.75
+	timer1.Initialize("timer1", 20000)
+	timer1.Enabled=True
+	analog1.Text="1.000"
+End Sub
+
+Sub btnConnect_Click
+	If manager.GetDevices.Length = 0 Then
+		Label1.Text = "USB device not found"
+	Else
+		Dim device As UsbDevice = manager.GetDevices(0) 'the device
+		If manager.HasPermission(device) = False Then
+			manager.RequestPermission(device)
+		Else
+			usbserial.Initialize("serial", device, -1)
+			usbserial.BaudRate = 9600
+			usbserial.DataBits = usbserial.DATA_BITS_8
+			usbserial.StartReading
+			Label1.Text = "Connected"
+		End If
+	End If
+End Sub
+
+Sub TTS1_Ready (Success As Boolean)
+	If Success Then
+		btnTalk.Enabled=True
+	Else
+		ToastMessageShow("Error initializing TTS engine.", "")
+	End If
+End Sub
+
+Sub btnTalk_Click
+	talk
+	timer1.Enabled=True
+	speakEn=True
+	btnStop.Enabled=True
+	lblTime.Enabled=True
+	changeBar.Enabled=True
+End Sub
+
+Sub Activity_Resume
+	If TTS1.IsInitialized = False Then
+		TTS1.Initialize("TTS1")
+		TTS1.SpeechRate = 0.75
+	End If
+End Sub
+
+Private Sub serial_DataAvailable (Buffer() As Byte)		'3 bytes received
+	Dim a1 As Int
+
+	If Buffer.Length > 2 Then
+		'Log(Buffer(0))
+
+		a1=Bit.And(0xFF, Buffer(1))
+		volt = NumberFormat((a1 + Buffer(2)*256)*5/1024,1,3)
+		analog1.Text=volt
+
+		If Buffer(0)=0 Then
+			timer1.Enabled=False
+			talk
+			timer1.Enabled=True
+		End If
+	End If
+
+End Sub
+
+Sub talk
+	TTS1.Speak(volt & "volts", True)
+End Sub
+
+Sub Timer1_Tick
+	If speakEn Then talk
+End Sub
+
+Sub changeBar_ValueChanged (Value As Int, UserChanged As Boolean)
+	Dim sec As String
+	If UserChanged Then
+		sec = changeBar.Value + 5
+		timer1.Interval = 1000 * sec
+		lblTime.Text = "Talk every " & sec & " seconds"
+	End If
+End Sub
+
+Sub btnStop_Click
+	timer1.Enabled=False
+	btnStop.Enabled=False
+	speakEn=False
+	lblTime.Enabled=False
+	changeBar.Enabled=False
+End Sub
+
+
+Sub Activity_Pause (UserClosed As Boolean)
+	TTS1.Release
+End Sub
+
+
+
